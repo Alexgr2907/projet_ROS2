@@ -144,12 +144,13 @@ from std_msgs.msg import Float64
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
+from sensor_msgs.msg import CompressedImage
 
 class VisionNode(Node):
     def __init__(self):
         super().__init__('vision_node')
         self.bridge = CvBridge()
-        self.subscription = self.create_subscription(Image, '/image_raw', self.listener_callback, 10)
+        self.subscription = self.create_subscription(CompressedImage, 'camera/image_raw/compressed', self.listener_callback, 10)
         self.error_publisher = self.create_publisher(Float64, '/vision/direction_erreur', 10)
         self.choix_rond_point = 'gauche'
         # Mémoire de la largeur de la route
@@ -188,7 +189,7 @@ class VisionNode(Node):
 
     def listener_callback(self, msg):
         try:
-            image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            image = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
         except Exception as e: return
 
         h, w, _ = image.shape
@@ -196,7 +197,7 @@ class VisionNode(Node):
         h_roi = roi.shape[0]
         hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
 
-        mask_green = cv2.inRange(hsv, np.array([35, 50, 20]), np.array([85, 255, 255]))
+        mask_green = cv2.inRange(hsv, np.array([45, 50, 20]), np.array([95, 255, 255]))
         mask_red1 = cv2.inRange(hsv, np.array([0, 70, 50]), np.array([10, 255, 255]))
         mask_red2 = cv2.inRange(hsv, np.array([170, 70, 50]), np.array([179, 255, 255]))
         mask_red = cv2.bitwise_or(mask_red1, mask_red2)
@@ -264,6 +265,11 @@ class VisionNode(Node):
 
         cv2.circle(roi, (int(target_x), int(roi.shape[0]/2)), 8, (255, 0, 0), -1)
         cv2.imshow("Camera Robot", roi)
+
+        masques_combines = np.hstack((mask_green, mask_red))
+            
+        # 3. Afficher les fenêtres
+        cv2.imshow("Masque", masques_combines)
         cv2.waitKey(1)
 
 def main(args=None):
