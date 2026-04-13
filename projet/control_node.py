@@ -137,17 +137,17 @@ class ControlNode(Node):
         self.vitesse_max = 0.15  # Vitesse de croisière
         
         # Kp : La force pour revenir au centre
-        self.kp = 0.0035
+        self.kp = 0.0040
         
         # Kd : L'amortisseur (LE SECRET DE LA FLUIDITÉ)
         # S'il oscille (gauche/droite), on augmente le Kd.
-        self.kd = 0.012
+        self.kd = 0.015
         
         # Mémoire pour le calcul de la dérivée
         self.erreur_precedente = 0.0
 
         # --- FREIN D'URGENCE (Pour l'angle droit plus tard) ---
-        self.seuil_urgence = 170.0
+        self.seuil_urgence = 250.0
         self.kp_pivot = 0.008
         self.en_urgence = False
 

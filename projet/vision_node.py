@@ -151,7 +151,7 @@ class VisionNode(Node):
         self.bridge = CvBridge()
         self.subscription = self.create_subscription(Image, '/image_raw', self.listener_callback, 10)
         self.error_publisher = self.create_publisher(Float64, '/vision/direction_erreur', 10)
-        
+        self.choix_rond_point = 'gauche'
         # Mémoire de la largeur de la route
         self.moitie_route = 200.0 
 
@@ -217,19 +217,37 @@ class VisionNode(Node):
             erreur_finale = -400.0
             target_x = centre_image - 400
         else:
-            # CONDUITE NORMALE
+            # 3. CONDUITE NORMALE ET ROND-POINT
             if cx_green is not None and cx_red is not None:
-                target_x = (cx_green + cx_red) / 2
-                largeur = abs(cx_red - cx_green) / 2.0
-                if largeur < 300.0: self.moitie_route = largeur
+                
+                # --- LE DÉCLENCHEUR INFAILLIBLE DU ROND-POINT ---
+                # Si le Rouge est à gauche du Vert, on regarde l'îlot central !
+                if cx_red < cx_green:
+                    if self.choix_rond_point == 'gauche':
+                        # On s'engage à GAUCHE : on vise à gauche du demi-cercle Rouge
+                        target_x = cx_red - self.moitie_route
+                        cv2.putText(roi, "ROND-POINT: GO GAUCHE", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                    else:
+                        # On s'engage à DROITE : on vise à droite du demi-cercle Vert
+                        target_x = cx_green + self.moitie_route
+                        cv2.putText(roi, "ROND-POINT: GO DROITE", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                
+                # --- CONDUITE CLASSIQUE EN LIGNE DROITE ---
+                else:
+                    target_x = (cx_green + cx_red) / 2
+                    largeur = (cx_red - cx_green) / 2.0
+                    # On met à jour la mémoire si la route a une taille cohérente
+                    if largeur < 300.0: 
+                        self.moitie_route = largeur
+
+            # --- S'IL NE VOIT QU'UNE SEULE LIGNE (Dans le rond-point ou en courbe) ---
             elif cx_green is not None:
                 target_x = cx_green + self.moitie_route
             elif cx_red is not None:
-                # On réduit un peu l'offset pour ne pas trop s'écarter (1.2 au lieu de 1.3)
                 target_x = cx_red - (self.moitie_route * 1.2)
                 
             erreur_finale = target_x - centre_image
-
+            
         msg_erreur = Float64()
         msg_erreur.data = float(erreur_finale)
         self.error_publisher.publish(msg_erreur)
