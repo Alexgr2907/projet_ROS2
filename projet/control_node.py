@@ -134,14 +134,14 @@ class ControlNode(Node):
         self.publisher = self.create_publisher(Twist, '/cmd_vel', 10)
 
         # --- PARAMÈTRES DU CORRECTEUR PD ---
-        self.vitesse_max = 0.12  # Vitesse de croisière
+        self.vitesse_max = 0.15  # Vitesse de croisière
         
         # Kp : La force pour revenir au centre
-        self.kp = 0.004 
+        self.kp = 0.0035
         
         # Kd : L'amortisseur (LE SECRET DE LA FLUIDITÉ)
         # S'il oscille (gauche/droite), on augmente le Kd.
-        self.kd = 0.010 
+        self.kd = 0.012
         
         # Mémoire pour le calcul de la dérivée
         self.erreur_precedente = 0.0

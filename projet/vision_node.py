@@ -155,73 +155,97 @@ class VisionNode(Node):
         # Mémoire de la largeur de la route
         self.moitie_route = 200.0 
 
+    def analyser_ligne(self, mask, w_img, h_roi):
+        """Détecte si une ligne forme un vrai mur avec filtres de sécurité"""
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if contours:
+            c = max(contours, key=cv2.contourArea)
+            aire_contour = cv2.contourArea(c)
+            
+            if aire_contour > 600: # Un peu plus de pixels pour filtrer le bruit
+                M = cv2.moments(c)
+                if M['m00'] > 0:
+                    cx = int(M['m10'] / M['m00'])
+                    cy = int(M['m01'] / M['m00']) # On récupère aussi la hauteur du centre
+                    
+                    x, y, w, h = cv2.boundingRect(c)
+                    aire_box = w * float(h)
+                    extent = aire_contour / max(1.0, aire_box)
+                    
+                    # CONDITIONS DE MUR (Angle Droit) :
+                    # 1. La forme est bien horizontale (w > h)
+                    est_aplati = w > h * 2.0
+                    # 2. Elle remplit bien sa boîte (pas une diagonale)
+                    est_plein = extent > 0.50 
+                    # 3. Elle est loin devant (dans le haut du ROI)
+                    est_loin = cy < (h_roi * 0.4) 
+                    
+                    # C'est un mur uniquement si c'est aplati, plein ET loin
+                    est_un_mur = est_aplati and est_plein and est_loin
+                    
+                    return cx, est_un_mur, (x, y, w, h)
+        return None, False, None
+
     def listener_callback(self, msg):
         try:
             image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-        except Exception as e:
-            return
+        except Exception as e: return
 
         h, w, _ = image.shape
-        
-        roi = image[int(h * 0.5):h, 0:w]
+        roi = image[int(h * 0.5):h, 0:w] # Zone d'intérêt (ROI)
+        h_roi = roi.shape[0]
         hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
 
-        # Saturation remontée à 50 pour éviter de confondre le sol beige avec du rouge/vert !
         mask_green = cv2.inRange(hsv, np.array([35, 50, 20]), np.array([85, 255, 255]))
         mask_red1 = cv2.inRange(hsv, np.array([0, 70, 50]), np.array([10, 255, 255]))
         mask_red2 = cv2.inRange(hsv, np.array([170, 70, 50]), np.array([179, 255, 255]))
         mask_red = cv2.bitwise_or(mask_red1, mask_red2)
 
-        # 3. Calcul des centres
-        cx_green = None
-        cx_red = None
-
-        M_green = cv2.moments(mask_green)
-        if M_green['m00'] > 500: # Anti-bruit
-            cx_green = int(M_green['m10'] / M_green['m00'])
-
-        M_red = cv2.moments(mask_red)
-        if M_red['m00'] > 500:
-            cx_red = int(M_red['m10'] / M_red['m00'])
+        # 1. Analyse avec le nouveau filtre de hauteur h_roi
+        cx_green, mur_vert, box_green = self.analyser_ligne(mask_green, w, h_roi)
+        cx_red, mur_rouge, box_red = self.analyser_ligne(mask_red, w, h_roi)
 
         centre_image = w / 2
+        erreur_finale = 0.0
         target_x = centre_image 
 
-        # 4. LOGIQUE DE CIBLAGE
-        if cx_green is not None and cx_red is not None:
-            target_x = (cx_green + cx_red) / 2
-            
-            # On calcule la largeur actuelle
-            largeur_mesuree = abs(cx_red - cx_green) / 2.0
-            
-            # SÉCURITÉ : On n'enregistre la largeur QUE si c'est une route normale (ex: max 250 pixels)
-            # Si c'est plus grand, c'est qu'on arrive au rond point, on garde l'ancienne valeur !
-            if largeur_mesuree < 300.0: 
-                self.moitie_route = largeur_mesuree
-            
-        elif cx_green is not None:
-            # Ligne verte uniquement
-            target_x = cx_green + self.moitie_route
-            
-        elif cx_red is not None:
-            # Ligne rouge uniquement
-            target_x = cx_red - self.moitie_route
+        # 2. LOGIQUE DE DÉCISION
+        if mur_vert:
+            erreur_finale = 400.0 
+            target_x = centre_image + 400 
+        elif mur_rouge:
+            erreur_finale = -400.0
+            target_x = centre_image - 400
+        else:
+            # CONDUITE NORMALE
+            if cx_green is not None and cx_red is not None:
+                target_x = (cx_green + cx_red) / 2
+                largeur = abs(cx_red - cx_green) / 2.0
+                if largeur < 300.0: self.moitie_route = largeur
+            elif cx_green is not None:
+                target_x = cx_green + self.moitie_route
+            elif cx_red is not None:
+                # On réduit un peu l'offset pour ne pas trop s'écarter (1.2 au lieu de 1.3)
+                target_x = cx_red - (self.moitie_route * 1.2)
+                
+            erreur_finale = target_x - centre_image
 
-        # 5. Calcul et publication de l'erreur
-        erreur = target_x - centre_image
-        
         msg_erreur = Float64()
-        msg_erreur.data = float(erreur)
+        msg_erreur.data = float(erreur_finale)
         self.error_publisher.publish(msg_erreur)
 
-        # 6. Affichages visuels
+        # Dessin et Affichage
+        if box_green:
+            gx, gy, gw, gh = box_green
+            c_g = (0,0,255) if mur_vert else (0,255,0)
+            cv2.rectangle(roi, (gx,gy), (gx+gw, gy+gh), c_g, 2)
+        if box_red:
+            rx, ry, rw, rh = box_red
+            c_r = (255,0,0) if mur_rouge else (0,0,255)
+            cv2.rectangle(roi, (rx,ry), (rx+rw, ry+rh), c_r, 2)
+
         cv2.circle(roi, (int(target_x), int(roi.shape[0]/2)), 8, (255, 0, 0), -1)
         cv2.imshow("Camera Robot", roi)
-        
-        # --- LA FENÊTRE DE DIAGNOSTIC DES COULEURS ---
-        masques = np.hstack((mask_green, mask_red))
-        cv2.imshow("Filtres Vert | Rouge", masques)
-        
         cv2.waitKey(1)
 
 def main(args=None):
