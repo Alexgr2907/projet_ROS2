@@ -134,7 +134,7 @@ class ControlNode(Node):
         self.publisher = self.create_publisher(Twist, '/cmd_vel', 10)
 
         # --- PARAMÈTRES DU CORRECTEUR PD ---
-        self.vitesse_max = 0.080  # Vitesse de croisière
+        self.vitesse_max = 0.060  # Vitesse de croisière
         
         # Kp : La force pour revenir au centre
         self.kp = 0.0040

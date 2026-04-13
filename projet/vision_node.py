@@ -152,7 +152,7 @@ class VisionNode(Node):
         self.bridge = CvBridge()
         self.subscription = self.create_subscription(CompressedImage, 'camera/image_raw/compressed', self.listener_callback, 10)
         self.error_publisher = self.create_publisher(Float64, '/vision/direction_erreur', 10)
-        self.choix_rond_point = 'gauche'
+        self.choix_rond_point = 'droite'
         # Mémoire de la largeur de la route
         self.moitie_route = 200.0 
 
@@ -197,7 +197,7 @@ class VisionNode(Node):
         h_roi = roi.shape[0]
         hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
 
-        mask_green = cv2.inRange(hsv, np.array([45, 50, 20]), np.array([95, 255, 255]))
+        mask_green = cv2.inRange(hsv, np.array([80, 30, 150]), np.array([110, 150, 255]))
         mask_red1 = cv2.inRange(hsv, np.array([0, 70, 50]), np.array([10, 255, 255]))
         mask_red2 = cv2.inRange(hsv, np.array([170, 70, 50]), np.array([179, 255, 255]))
         mask_red = cv2.bitwise_or(mask_red1, mask_red2)
@@ -226,26 +226,26 @@ class VisionNode(Node):
                 if cx_red < cx_green:
                     if self.choix_rond_point == 'gauche':
                         # On s'engage à GAUCHE : on vise à gauche du demi-cercle Rouge
-                        target_x = cx_red - self.moitie_route
+                        target_x = cx_red - (self.moitie_route*1.4)
                         cv2.putText(roi, "ROND-POINT: GO GAUCHE", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
                     else:
                         # On s'engage à DROITE : on vise à droite du demi-cercle Vert
-                        target_x = cx_green + self.moitie_route
+                        target_x = cx_green + (self.moitie_route*1.4)
                         cv2.putText(roi, "ROND-POINT: GO DROITE", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 
                 # --- CONDUITE CLASSIQUE EN LIGNE DROITE ---
                 else:
-                    target_x = (cx_green + cx_red) / 2
-                    largeur = (cx_red - cx_green) / 2.0
+                    target_x = ((cx_green + cx_red) / 2) +30.0
+                    largeur = ((cx_red - cx_green) / 2.0) 
                     # On met à jour la mémoire si la route a une taille cohérente
                     if largeur < 300.0: 
                         self.moitie_route = largeur
 
             # --- S'IL NE VOIT QU'UNE SEULE LIGNE (Dans le rond-point ou en courbe) ---
             elif cx_green is not None:
-                target_x = cx_green + self.moitie_route
+                target_x = cx_green + (self.moitie_route*1.0)
             elif cx_red is not None:
-                target_x = cx_red - (self.moitie_route * 1.2)
+                target_x = cx_red - (self.moitie_route * 1.0)
                 
             erreur_finale = target_x - centre_image
             
