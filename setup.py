@@ -25,6 +25,7 @@ setup(
         'console_scripts': [
             'vision_node = projet.vision_node:main',
             'control_node = projet.control_node:main',
+            'lidar_node = projet.lidar_node:main',
         ],
     },
 )
