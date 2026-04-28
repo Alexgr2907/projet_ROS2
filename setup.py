@@ -24,7 +24,8 @@ setup(
     entry_points={
         'console_scripts': [
             'vision_node = projet.vision_node:main',
-            'control_node = projet.control_node:main',
+            'control_node = projet.control_node:main','teleop_hand_node = projet.teleop_hand_node:main',
+            'corridor_node = projet.corridor_node:main',
         ],
     },
 )
