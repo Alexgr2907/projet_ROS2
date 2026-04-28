@@ -23,9 +23,17 @@ def generate_launch_description():
         output='screen'
     )
 
+    lidar_node = Node(
+        package='projet',
+        executable='lidar_node',
+        name='lidar_node_sensor',
+        output='screen'
+    )
+
     # 4. On assemble le tout et on l'envoie à ROS 2
     ld = LaunchDescription()
     ld.add_action(vision_node)
     ld.add_action(control_node)
+    ld.add_action(lidar_node)
 
     return ld
